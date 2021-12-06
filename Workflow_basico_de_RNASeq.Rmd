@@ -1,0 +1,480 @@
+---
+title: "_Workflow_ de análisis de expresión diferencial usando RNA-seq"
+author: "Mireia Ferrer, Ricardo Gonzalo y Alex Sanchez"
+date: "Diciembre 2021"
+output:
+  html_document:
+    toc: true
+    toc_depth: 3
+    toc_float: 
+      collapsed: true
+      smooth_scroll: true
+    number_sections: true
+    theme: cerulean
+    highlight: textmate
+editor_options: 
+  chunk_output_type: console
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE,message=FALSE, warning=FALSE)
+```
+
+# Reconocimiento
+
+Este material se ha desarrollado a partir de distintos materiales basándose principalmente en las siguientes fuentes:
+
+- https://combine-australia.github.io/RNAseq-R/
+
+- https://www.bioconductor.org/packages/release/workflows/vignettes/RNAseq123/inst/doc/limmaWorkflow.html
+
+
+# Antes de empezar
+
+## Directorios de trabajo
+
+Cree un directorio para los datos llamado "data" donde colocará todos los archivos necesarios para los análisis.
+
+Establezca el directorio de trabajo en la carpeta de donde cuelgan los datos o, preferentemente, cree un proyecto de Rstudio cuyo directorio principal sea dicha carpeta.
+
+
+## Instalación de paquetes
+
+Para ejecutar este workflow se necesita tener instalado Bioconductor (tal como se indica en [https://www.bioconductor.org/install/](https://www.bioconductor.org/install/). 
+
+Además se utilizarán los siguientes paquetes:
+- Paquete `Rsubread`: proporciona herramientas para la alineación y cuantificación de lecturas.
+- Paquete `edgeR`: proporciona herramientas para pre-procesado, visualización y análisis de datos de contajes.
+- Paquete `limma`: proporciona herramientas para el análisis de expresión diferencial.
+- Paquete `pheatmap`: proporciona  herramientas para trazar mapas de calor.
+
+EL código siguiente los instalará si no están instalados y, en caso de que lo estén, los cargará en memoria (equivaliendo, en este caso, a una instrucción `library`).
+
+```{r instalPackages}
+if (!require(Rsubread)) BiocManager::install("Rsubread")
+if (!require(edgeR))BiocManager::install("edgeR")
+if (!require(limma))BiocManager::install("limma")
+if (!require(pheatmap))BiocManager::install("pheatmap")
+if (!require(FactoMineR)) install.packages("FactoMineR", dep=TRUE)
+if (!require(factoextra)) install.packages("factoextra", dep=TRUE)
+```
+
+
+# Datos para el análisis
+
+## _Dataset_ de glándulas mamarias de ratón
+
+Los datos para este tutorial provienen de un artículo de Nature Cell Biology, [EGF-mediated induction of Mcl-1 at the switch to lactation is essential for alveolar cell survival](https://pubmed.ncbi.nlm.nih.gov/25730472/)  (Fu et al 2015). 
+Tanto los datos en bruto (lecturas de secuencia) como los datos procesados (recuentos) están disponibles para su descarga de la base de datos Gene Expression Omnibus (GEO) con el número de acceso GSE60450.
+
+Este estudio examina los perfiles de expresión de células madre basales enriquecidas (B) y células luminales comprometidas (L) en la glándula mamaria de ratones vírgenes, preñados y lactantes. El experimento se organizó en seis grupos, uno para cada combinación de tipo de célula y estado de ratón. Cada grupo contiene dos réplicas biológicas.
+
+## Archivos
+
+Para el análisis se dispone de los archivos siguientes, copiados en el directorio `data`:
+
+* _SampleInfo.csv_: contiene información de ejemplo
+* 4 files _.bam_: contienen los resultados de alineación para 4 de los ejemplos ("demo dataset")
+* _GSE60450_Lactation-GenewiseCounts.txt_: contiene la matriz de recuentos de todo el conjunto de datos.
+
+## Creación de la información de entrada
+
+El archivo _SampleInfo.csv_ contiene información básica acerca de los archivos, definición de los grupos, covariables y otra información de utilidad. 
+
+```{r loadSampleInfo}
+# Read the sample information into R
+sampleinfo <- read.delim("./data/sampleInfo.txt", head=TRUE, sep="\t")
+sampleinfo
+```
+
+# Obtención de la matriz de recuentos 
+
+## Cuantificación de lecturas alineadas
+
+La alineación de las secuencias, obtenidas al secuenciar, con el genoma de referencia,  produce un conjunto de archivos BAM, donde cada archivo contiene las alineaciones de lectura para cada biblioteca. 
+
+En el archivo BAM, se encuentra la ubicación del cromosoma para cada lectura que se asignó a esa posición. 
+Puesto que este proceso es computacionalmente intensivo se demuestra como hacerlo utilizando un subconjunto de 1000 "reads" por muestra, alineadas con el cromosoma 1 del genoma del ratón.
+
+Utilizaremos el paquete `Rsubread`,  que proporciona funciones para el mapeo de "reads" y su cuantificación.
+
+```{r}
+library(Rsubread)
+bam.files <- list.files(path = "./data", pattern = ".BAM$", full.names = TRUE)
+bam.files
+```
+
+Las funciones del paquete nos permiten ver, por ejemplo, la proporción de "reads" que se asignaron al cromosoma 1:
+
+```{r}
+props <- propmapped(files=bam.files)[,1:2]
+props
+```
+
+Los "reads" mapeados se pueden contar a través de cada genes mediante la función `featureCounts`. Esta función incorpora anotaciones integradas para ensamblajes del genoma de ratón (mm9, mm10) y humano (hg19) (anotación REFSEQ NCBI).
+
+El siguiente código utiliza los intervalos de exones definidos en la anotación `refseq ncbi` del genoma `mm10`. Los "reads" mapeados en exones se suman para obtener el recuento de cada gen con tratamiento especial para los "reads" que abarcan los límites exón-exón. 
+
+Usaremos la configuración determinada de la función `featureCounts()` visible haciendo:
+```{r}
+?featureCounts
+```
+
+`featureCounts` toma todos los archivos BAM como entrada y devuelve un objeto que incluyes la matriz de contajes. Cada muestra da lugar a una columna y cada fila corresponde con los recuentos acumulados para un gen, en dicha muestra.
+
+```{r}
+fc <- featureCounts(bam.files, annot.inbuilt="mm10")
+class(fc)
+names(fc)
+```
+
+El objeto resultante es una lista. Observando los componentes que contiene puede observarse que podría haberse utilizado un `expressionSet` (o crear una nueva clase a partir de ésta) para contener los resultados, aunque, aparentemente, los desarrolladores han preferido no hacerlo.
+
+Las estadísticas del mapeo leído se pueden ver con `fc$stats`.  Esto informa el número de "reads" no asignadas y las razones por las que no se asignan (por ejemplo, ambigüedad, multimapeo,...), además del número de  "reads" asignadas correctamente para cada librería. (Sabemos la verdadera razón por la que la mayoría de las lecturas no se han mapeado correctamente y es que no son del cromosoma 1!)
+
+```{r}
+## Take a look at the featurecounts stats
+fc$stat
+```
+
+Las anotaciones contienen la información de los "reads" que se han colapsado (combinado) en cada gen:
+
+```{r}
+head(fc$annotation)
+```
+
+La información de cada muestra en cada gen se guarda finalmente en  `fc$counts` cuyas dimensiones nos informan tanto de las muestras como de los genes.
+
+```{r}
+## Take a look at the dimensions to see the number of genes
+dim(fc$counts)
+## Take a look at the first 6 lines
+head(fc$counts)
+counts_chr1 <- fc$counts
+```
+
+En este caso guardaremos la matriz de contajes para su uso posterior
+
+```{r}
+write.table(counts_chr1, "counts_chr1.txt")
+```
+
+### Ejercicio
+
+- Repetir el recuento sobre los exones, en lugar de los genes (especifique  `useMetaFeatures = FALSE`), y llame al  objeto  `featureCounts fc.exon`. 
+
+- Compruebe la dimensión de la matriz de recuentos. ¿Alguna diferencia?
+
+## Importación de una matriz
+
+La matriz de recuento original (de todo el conjunto de datos) generada en el estudio se puede descargar desde el sitio web de GEO [GEO website](http://www.ncbi.nlm.nih.gov/geo/query/acc.cgi?acc=GSE60450) y está contenida en el archivo  `GSE60450_Lactation-GenewiseCounts.txt`.
+
+- Echemos un vistazo a los datos.
+
+```{r loadData}
+# Read the data into R
+seqdata <- read.delim("./data/GSE60450_Lactation-GenewiseCounts.txt", stringsAsFactors = FALSE)
+dim(seqdata)
+head(seqdata)
+```
+
+El objeto `seqdata`  contiene información sobre genes (un gen por fila). La primera columna tiene el identificador `Entrez`, la segunda tiene la longitud del gen y las  columnas restantes contienen información sobre el número de "reads" alineadas con el gen en cada muestra experimental.
+
+Manipularemos y reformaremos la matriz de recuentos en un formato adecuado para el análisis posterior. Necesitamos hacer una nueva matriz que contenga únicamente los recuentos, pero podemos almacenar los identificadores de genes (la columna `EntrezGeneID`)  como nombres de fila (obsérvese que esto podrá hacerse así porque estos identificadores son únicos, puesto que no trabajamos con transcritos sino con genes, que tienen identificadores únicos).
+
+El nuevo objeto `countdata`, contiene únicamente los contajes para las 12 muestras
+
+```{r createCountMatrix}
+# Remove first two columns from seqdata
+countdata <- seqdata[,-(1:2)]
+# Store EntrezGeneID as rownames
+rownames(countdata) <- seqdata$EntrezGeneID
+```
+
+Si nos fijamos en los nombres de las columnas vemos que son los nombres de archivo para cada muestra, que son bastante largos. Cambiaremos el nombre de las columnas con los `sampleNames` almacenados en el `data.frame` `sampleinfo`. 
+
+
+```{r colNames}
+colnames(countdata)
+```
+
+Primero debemos verificar que estén en el mismo orden (¡esto es muy importante!):
+
+```{r modifyColNames}
+all.equal(colnames(countdata), sampleinfo$FileName)
+```
+
+Una vez confirmado podemos asignar los nuevos nombres:
+
+```{r}
+colnames(countdata) <- sampleinfo$ShortName
+head(countdata)
+```
+
+# Preprocesamiento de datos
+
+## Filtraje de genes poco expresados
+
+Los genes con recuentos muy bajos en todas las librerías proporcionan poca evidencia de expresión diferencial e interfieren con algunas de las aproximaciones estadísticas que se utilizarán más adelante.
+Además penalizan los ajustes por comparaciones múltiples para estimar las tasas de falsos positivos, lo que resta potencia para detectar genes expresados diferencialmente. Por este motivo, se aconseja filtrar estos genes antes de continuar los análisis.
+
+Antes de filtrar, sin embargo, expresaremos los contajes en "CPMs" es decir "counts per million" con el fin de evitar que se atribuyan valores demasiado bajos debido a tamaños distintos de las librerías.
+
+Es decir, en primer lugar se estandarizan los contajes basándonos en el tamaño de la librería y a continuación se realizará el filtraje.
+
+Para ello se normalizaran los contajes brutos para las diferentes profundidades de secuenciación (tamaños de librería) para cada muestra y se compararan con los valores de recuento por millón (CPM) utilizando la  función  `cpm()` del paquete `edgeR`. 
+
+En nuestro caso elegimos retener aquellos genes que _se expresan a un CPM superior a 0,5 en al menos dos muestras_. Esto es obviamente arbitrario, pero la experiencia sugiere que cantidades inferiores a éstas, u otras similares, suelen corresponderse con ausencia de expresión, más que otra explicación.
+
+Los tamaños de las librerías se obtienen simplemente sumando las columnas de la matriz de datos, aunque no hace falta que ésto se lleve a cabo explicita mente puesto que la función `cpm` lo hace de forma automática.
+
+```{r librarySizes}
+colSums(countdata)
+```
+
+```{r getCPM}
+library(edgeR)
+# Obtain CPMs
+counts.CPM <- cpm(countdata)
+# Have a look at the output
+head(counts.CPM)
+```
+
+Una vez obtenidos los CPMS se calcula el umbral de corte y éste se utiliza para generar una matriz booleana que se utilizará para el filtraje
+
+```{r subsetThreshold}
+# Which values in myCPM are greater than 0.5?
+thresh <- counts.CPM > 0.5
+# This produces a logical matrix with TRUEs and FALSEs
+head(thresh)
+```
+
+```{r subsetMatrix}
+# we would like to keep genes that have at least 2 TRUES in each row of thresh
+keep <- rowSums(thresh) >= 2
+# Subset the rows of countdata to keep the more highly expressed genes
+counts.keep <- countdata[keep,]
+dim(countdata)
+dim(counts.keep)
+```
+
+## Uso de clases específicas para manejar los datos
+
+La primera parte del pre-procesado se ha llevado a cabo sin utilizar ni funciones ni clases específicas, como podría ser `expressionSet, `summarizedExperiment` para los datos o alguna variante de `nsFilter` para el filtraje. 
+
+Si bien esto puede ser útil con finalidades didácticas, siempre es más eficiente trabajar con clases creadas específicamente para gestionar tipos de datos complejos como las citadas, o, en este caso la clase `DGEList`, una clase S4, definida en el paquete `edgeR` que utiliza listas para almacenar recuentos de "reads" e información asociada de tecnologías de secuenciación o expresión génica digital.
+
+```{r makeDGEObj}
+dgeObj <- DGEList(counts.keep)
+# have a look at dgeObj
+dgeObj
+# See what slots are stored in dgeObj
+names(dgeObj)
+# Library size information is stored in the samples slot
+dgeObj$samples
+```
+
+# Exploración de los datos
+
+Una vez descartados los genes poco expresados y con los recuentos almacenados en un objeto `DGEList`,  podemos`proceder a realizar algunos gráficos exploratorios para determinar si los datos aparentan buena calidad y/o si presentan algún problema.
+
+
+## Boxplot de los recuentos no normalizados
+
+Los datos de conteo no se distribuyen normalmente, por lo que si queremos examinar las distribuciones de los recuentos sin procesar, debemos transformarlos, por ejemplo tomando logaritmos (la transformación habitual para contajes).
+
+Podemos usar la función `cpm`  para obtener recuentos `log2` por millón, que se corrigen para los diferentes tamaños de biblioteca. La función `cpm` también agrega una pequeña cantidad evitar tomar log de cero.
+
+```{r}
+# Get log2 counts per million
+logcounts <- cpm(dgeObj,log=TRUE)
+# Check distributions of samples using boxplots
+boxplot(logcounts, ylab="Log2-CPM",las=2, xlab="", cex.axis=0.8, main="Boxplots of logCPMs (unnormalised)")
+# Let's add a blue horizontal line that corresponds to the median logCPM
+abline(h=median(logcounts), col="blue")
+```
+
+A partir de los boxplots vemos que, en general, las distribuciones de densidad de las intensidades logarítmicas brutas no son idénticas, pero tampoco muy diferentes. Si una muestra está realmente muy por encima o por debajo de la línea horizontal azul, es posible que tengamos que investigar esa muestra más a fondo.
+
+## Normalización
+
+La nacionalización de TMM se realiza para eliminar los sesgos de composición entre librerías (Mark D. Robinson y Oshlack 2010). Esto genera un conjunto de factores de normalización, donde el producto de estos factores y los tamaños de librería definen el tamaño efectivo de la biblioteca. La función `calcNormFactors` calcula los factores de normalización entre librerías.
+
+```{r calcNormFactors}
+# Apply normalisation to DGEList object
+dgeObj_norm <- calcNormFactors(dgeObj)
+```
+
+Esto actualizará los factores de normalización en el objeto DGEList  (sus valores predeterminados son 1).
+
+```{r}
+dgeObj_norm
+```
+
+Si ahora repetimos el gráfico con los contajes normalizados veremos como las diferencias se han reducido haciendo los datos _más comparables_ que es lo que se persigue.
+
+```{r}
+# Get log2 counts per million
+logcounts_norm <- cpm(dgeObj_norm,log=TRUE)
+# Check distributions of samples using boxplots
+boxplot(logcounts_norm, ylab="Log2-CPM",las=2, xlab="", cex.axis=0.7, main="Boxplots of logCPMs (normalised)")
+# Let's add a blue horizontal line that corresponds to the median logCPM
+abline(h=median(logcounts_norm), col="blue")
+```
+
+## Análisis no supervisado de similaridad entre las muestras
+
+En general, en un estudio experimental en donde buscamos comparar distintas condiciones o tratamientos, esperaremos que las muestras pertenecientes al mismo grupo _se parezcan_ más entre ellas que a las de los otros grupos.
+
+Esta idea intuitiva puede concretarse a través de calcular y visualizar de alguna forma la similaridad entre las muestras. Esto puede hacerse de distintas formas pero algunas de las más habituales son, el _cluster_ o agrupamiento jerárquico y los métodos de reducción de la dimensión como el análisis de componentes principales (PCA) o el escalamiento multidimensional (MDS). Éste último tiene la ventaja que permite visualizar en dimensión reducida las similaridades entre muestras, más que los datos directos que es lo que hace el PCA.
+
+La función `dist` permite calcular una _matriz de distancias_ que contiene las comparaciones dos a dos entre todas las muestras.
+
+```{r}
+sampleDists <- dist(t(logcounts_norm))
+sampleDists
+```
+
+Las matrices de distancias se pueden visualizar directamente con un heatmap o en dimensión reducida con un MDS. También pueden utilizarse para llevar a cabo un cluster jerárquico o de otro tipo.
+
+```{r}
+library(factoextra)
+fviz_dist(sampleDists)
+```
+
+A partir de la matriz de distancias podemos realizar un agrupamiento jerárquico de las muestras en donde se puede ver como éstas tienden a agruparse de forma natural por los grupos experimentales que se han definido.
+
+```{r}
+plot(hclust(sampleDists),labels = colnames(logcounts_norm),main = "Dendogram of sample distances", cex=0.8)
+```
+
+Como puede verse las muestras tienden a agruparse, por grupo, luminal o basal, dentro de éste por estado y finalmente por réplica. 
+
+## Visualización en dimensión reducida
+
+Un enfoque complementario para determinar las principales fuentes de variabilidad en los datos es la visualización en dimensión reducida, ya sea de los datos o de la matriz de similaridades.
+
+Para la primera representación es habitual basarse en el resultado de un análisis de componentes principales (PCA) que representan las direcciones a lo largo de las cuales la variación en la matriz de datos es máxima, con la ventaja de que dichas direcciones son ortogonales (es decir independientes) y que explica cada una más información que la siguiente, por lo que con unas pocas dimensiones se suele poder explicar un alto porcentaje de la variabilidad.
+
+De forma análoga, el escalamiento multidimensional permite llevar a cabo una transformación similar a la del PCA, pero con la matriz de distancias, lo que proporciona una representación en dimensión reducida que describe con relativa fidelidad las diferencias y similaridades entre muestras. 
+
+Para esta segunda representación utilizaremos la función `plotMDS`.
+Es un poco difícil ver exactamente qué está pasando con la gráfica predeterminada, aunque vemos muestras que se agrupan en pares. Para hacer esta gráfica más informativa, podemos colorear las muestras de acuerdo con la información de agrupación (por ejemplo. Estado):
+
+```{r}
+sampleinfo$Status <- factor (sampleinfo$Status)
+col.status <- c("blue","red","dark green")[sampleinfo$Status]
+data.frame(sampleinfo$Status,col.status)
+plotMDS(logcounts_norm,col=col.status, main="Status", cex=0.7)
+```
+Como puede verse, el gráfico muestra la misma agrupación "natural" que el cluster jerárquico es decir que los grupos parecen estar bien definidos.
+
+# Análisis de expresión diferencial con limma-voom
+
+Una vez normalizados los datos y tras comprobar su calidad podemos proceder a seleccionar genes diferencialmente expresados. 
+Desde el inicio del análisis de datos de RNA-seq se ha puesto énfasis la diferencia con los datos de microarrays, que son variables continuas, frente a los de RNA-seq que son contajes. Siguiendo una cierta ortodoxia estadística, los primeros se suelen modelizar y analizar con (extensiones) del modelo lineal general, usando el paquete `limma` y los últimos con (extensiones) de modelos lineales generalizados propios de datos de contaje, usando por ejemplo el paquete `DESEQ`. Recientemente se introdujo una solución intermedia para datos de contaje consistente en aplicarles una transformación que los hace continuos permitiendo analizarlos con el paquete `limma`
+
+El  paquete limma  (Ritchie et al. 2015) ofrece la función `voom`,  que transforma los recuentos de "reads" en `logCMM` teniendo en cuenta la relación media-varianza en los datos (Charity W. Law et al. 2014). Una vez transformados los datos (`vooming`), los usuarios pueden aplicar un modelo lineal a los datos transformados en voom para probar genes expresados diferencialmente, con la suposición de que los datos subyacentes se distribuyen normalmente.
+
+La ventaja principal de esta aproximación es que permite trabajar con toda la flexibilidad de los modelos lineales para representar diseños experimentales, y, en muchos casos , aprovechar la experiencia previa del usuario en el manejo de limma.
+
+## Creación de la matriz de diseño y de contrastes
+
+Supongamos que estamos interesados en genes que se ven afectados por el embarazo y la lactancia en individuos basales o luminales. Utilizando las variable "CellType" y "Status" que combina ambos factores podemos definir la matriz del diseño y sobre ésta los contrastes que nos interesan.
+
+```{r}
+group <- paste(sampleinfo$CellType, sampleinfo$Status,  sep="." )
+design  <-  model.matrix(~0+group)
+colnames(design) <- gsub("group", "", colnames(design))
+rownames(design) <- sampleinfo$SampleName
+design
+```
+
+Dado que estamos interesados en las diferencias entre los grupos, necesitamos especificar qué comparaciones queremos probar. La comparación de intereses se puede especificar utilizando la función `makeContrasts.`  La matriz de contraste indica  qué columnas de la matriz `design` estamos interesados en comparar.
+
+```{r}
+cont.matrix <- makeContrasts(B.PregVsLac=basal.pregnant - basal.lactate, 
+                             L.PregVsLac=luminal.pregnant - luminal.lactate, levels=design)
+cont.matrix
+```
+
+## Transformación de los datos
+
+Tal como se ha indicado la transformación `voom` creará un nuevo objeto con campos equivalentes a los del DGELIST pero que puede ser analizado con limma.
+
+```{r}
+voomObj <- voom(dgeObj_norm, design)
+voomObj
+```
+
+## Selección de genes diferencialmente expresados
+
+Como en el caso de los microarrays el objeto `voomObj` y las matrices de diseño y contrastes se utilizaran para ajustar un modelo y, a continuación realizar las comparaciones especificadas sobre el modelo ajustado. El proceso finaliza con la regularización del estimador del error usando la función ` eBayes`.
+
+```{r}
+# Fit the linear model
+fit <- lmFit(voomObj)
+fit.cont <- contrasts.fit(fit, cont.matrix)
+fit.cont <- eBayes(fit.cont)
+```
+
+## Top tables
+
+Los resultados de un análisis de expresión diferencial se pueden extraer con la  función topTable:
+
+- El logFCcolumn da el cambio en escala logarítmica en la expresión de un gen entre los dos grupos probados
+- La columna AveExpr da el nivel promedio de expresión log2 para ese gen en todas las muestras del experimento.
+- La columna t es la estadística t moderada.
+- Columna P.Valor es el valor p asociado
+- Adj. P.Value es el valor p ajustado para múltiples pruebas. La forma más popular de ajuste es "BH", que es el método de Benjamini y Hochberg para controlar la tasa de falsos positivos (FDR).
+- El estadístico B es el logaritmo de la probabilidad posterior de que el gen se exprese diferencialmente frente a que no lo haga.
+
+```{r}
+toptab_B.PregVsLac <- topTable(fit.cont,coef=1,sort.by="p", number=nrow(fit.cont))
+head(toptab_B.PregVsLac)
+
+toptab_L.PregVsLac <- topTable(fit.cont,coef=2,sort.by="p", number=nrow(fit.cont))
+head(toptab_L.PregVsLac)
+```
+
+Podemos visualizar los resultados de cada comparación usando un `volcanoPlot`:
+
+```{r}
+volcanoplot(fit.cont,coef=1,highlight=100,names=fit.cont$genes$SYMBOL, main="B.PregVsLac")
+volcanoplot(fit.cont,coef=2,highlight=100,names=fit.cont$genes$SYMBOL, main="L.PregVsLac")
+```
+
+Los resultados pueden guardarse en archivos de texto o enviarse a tablas HTML interactivas (esta opción ocupa mucho espacio y memoria por lo que aquí se omite).
+
+```{r}
+write.csv(toptab_B.PregVsLac, "toptab_B.PregVsLac.csv")
+write.csv(toptab_B.PregVsLac, "toptab_L.PregVsLac.csv")
+```
+
+## Comparaciones múltiples y visualización de los resultados.
+
+Podemos usar la función limma `decideTests`  para generar un resumen rápido de los genes DE por debajo de un valor p ajustado de 0.05 para el contraste probado.
+
+```{r}
+summa.fit <- decideTests(fit.cont)
+summary(summa.fit)
+```
+
+### Visualización de perfiles de expresión
+
+Los perfiles de expresión obtenidos para los genes expresados diferencialmente superiores se pueden trazar en un mapa de calor, con genes (filas) y muestras (columnas) agrupados por similitud.
+
+```{r}
+library("pheatmap")
+topGenesBas <- rownames(subset(toptab_B.PregVsLac, abs(logFC)> 2.5 & adj.P.Val < 0.005))
+length(topGenesBas)
+topGenesLum <- rownames(subset(toptab_L.PregVsLac, abs(logFC)> 2.5 & adj.P.Val < 0.005))
+length(topGenesLum)
+topGenes <- union(topGenesBas, topGenesLum)
+length(topGenes)
+mat  <- logcounts_norm[topGenes, sampleinfo$ShortName]
+mat  <- mat - rowMeans(mat)
+library(pheatmap)
+pheatmap(mat)
+```
+
