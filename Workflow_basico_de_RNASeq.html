@@ -247,20 +247,31 @@ div.tocify {
 </div>
 
 
-<div id="reconocimiento" class="section level1" number="1">
-<h1 number="1"><span class="header-section-number">1</span> Reconocimiento</h1>
-<p>Este material se ha desarrollado a partir de distintos materiales basándose principalmente en las siguientes fuentes:</p>
+<div id="reconocimiento-y-referencias" class="section level1" number="1">
+<h1 number="1"><span class="header-section-number">1</span> Reconocimiento y referencias</h1>
+<p>Este material se ha desarrollado a partir de distintas fuentes basándose principalmente en las siguientes:</p>
 <ul>
-<li><p><a href="https://combine-australia.github.io/RNAseq-R/" class="uri">https://combine-australia.github.io/RNAseq-R/</a></p></li>
-<li><p><a href="https://www.bioconductor.org/packages/release/workflows/vignettes/RNAseq123/inst/doc/limmaWorkflow.html" class="uri">https://www.bioconductor.org/packages/release/workflows/vignettes/RNAseq123/inst/doc/limmaWorkflow.html</a></p></li>
+<li><p><a href="http://combine-australia.github.io/RNAseq-R/06-rnaseq-day1.html">RNA-seq analysis in R. Differential expression analysis</a></p></li>
+<li><p>RNA-seq analysis is easy as 1-2-3 with limma, Glimma and edgeR</p>
+<ul>
+<li><a href="https://www.ncbi.nlm.nih.gov/pmc/articles/PMC4937821/">Article</a></li>
+<li><a href="https://www.bioconductor.org/packages/release/workflows/vignettes/RNAseq123/inst/doc/limmaWorkflow.html">Bioconductor vignette</a></li>
+</ul></li>
+</ul>
+<p>Curiosamente, este estudio también se utiliza en una serie de tutoriales que llevan a cabo el similares preprocesado y análisis <em>usando Galaxy</em>.</p>
+<ul>
+<li><a href="https://training.galaxyproject.org/archive/2021-08-01/topics/transcriptomics/tutorials/rna-seq-reads-to-counts/tutorial.html">1. RNASeq: Reads to counts</a></li>
+<li><a href="https://training.galaxyproject.org/archive/2021-08-01/topics/transcriptomics/tutorials/rna-seq-counts-to-genes/tutorial.html">2. RNAseq: Counts to genes</a></li>
+<li><a href="https://training.galaxyproject.org/archive/2021-08-01/topics/transcriptomics/tutorials/rna-seq-genes-to-pathways/tutorial.html">3. RNASeq genes to pathways</a></li>
 </ul>
 </div>
 <div id="antes-de-empezar" class="section level1" number="2">
 <h1 number="2"><span class="header-section-number">2</span> Antes de empezar</h1>
 <div id="directorios-de-trabajo" class="section level2" number="2.1">
 <h2 number="2.1"><span class="header-section-number">2.1</span> Directorios de trabajo</h2>
-<p>Cree un directorio para los datos llamado “data” donde colocará todos los archivos necesarios para los análisis.</p>
-<p>Establezca el directorio de trabajo en la carpeta de donde cuelgan los datos o, preferentemente, cree un proyecto de Rstudio cuyo directorio principal sea dicha carpeta.</p>
+<p>Cree un directorio para los datos llamado “data” donde colocar todos los archivos necesarios para los análisis.</p>
+<p>Opcionalmente, puede crear un directorio “results” donde redirigir todos los archivos generados por los análisis.</p>
+<p>Establezca el directorio de trabajo en la carpeta de donde cuelgan los datos o, <strong>preferentemente</strong>, cree un proyecto de Rstudio cuyo directorio principal sea dicha carpeta.</p>
 </div>
 <div id="instalación-de-paquetes" class="section level2" number="2.2">
 <h2 number="2.2"><span class="header-section-number">2.2</span> Instalación de paquetes</h2>
@@ -279,7 +290,8 @@ if (!require(factoextra)) install.packages(&quot;factoextra&quot;, dep=TRUE)</co
 <h1 number="3"><span class="header-section-number">3</span> Datos para el análisis</h1>
 <div id="dataset-de-glándulas-mamarias-de-ratón" class="section level2" number="3.1">
 <h2 number="3.1"><span class="header-section-number">3.1</span> <em>Dataset</em> de glándulas mamarias de ratón</h2>
-<p>Los datos para este tutorial provienen de un artículo de Nature Cell Biology, <a href="https://pubmed.ncbi.nlm.nih.gov/25730472/">EGF-mediated induction of Mcl-1 at the switch to lactation is essential for alveolar cell survival</a> (Fu et al 2015). Tanto los datos en bruto (lecturas de secuencia) como los datos procesados (recuentos) están disponibles para su descarga de la base de datos Gene Expression Omnibus (GEO) con el número de acceso GSE60450.</p>
+<p>Los datos para este tutorial provienen de un artículo de Nature Cell Biology, <a href="https://pubmed.ncbi.nlm.nih.gov/25730472/">EGF-mediated induction of Mcl-1 at the switch to lactation is essential for alveolar cell survival</a> (Fu et al 2015).</p>
+<p>Tanto los datos en bruto (lecturas de secuencia) como los datos procesados (recuentos) están disponibles para su descarga de la base de datos Gene Expression Omnibus (GEO) con el número de acceso GSE60450,: <a href="https://www.ncbi.nlm.nih.gov/geo/query/acc.cgi?acc=GSE60450">https://www.ncbi.nlm.nih.gov/geo/query/acc.cgi?acc=GSE60450</a>.</p>
 <p>Este estudio examina los perfiles de expresión de células madre basales enriquecidas (B) y células luminales comprometidas (L) en la glándula mamaria de ratones vírgenes, preñados y lactantes. El experimento se organizó en seis grupos, uno para cada combinación de tipo de célula y estado de ratón. Cada grupo contiene dos réplicas biológicas.</p>
 </div>
 <div id="archivos" class="section level2" number="3.2">
@@ -287,7 +299,7 @@ if (!require(factoextra)) install.packages(&quot;factoextra&quot;, dep=TRUE)</co
 <p>Para el análisis se dispone de los archivos siguientes, copiados en el directorio <code>data</code>:</p>
 <ul>
 <li><em>SampleInfo.csv</em>: contiene información de ejemplo</li>
-<li>4 files <em>.bam</em>: contienen los resultados de alineación para 4 de los ejemplos (“demo dataset”)</li>
+<li>4 archivos <em>.bam</em>: contienen los resultados de alineación para 4 de los ejemplos (“demo dataset”)</li>
 <li><em>GSE60450_Lactation-GenewiseCounts.txt</em>: contiene la matriz de recuentos de todo el conjunto de datos.</li>
 </ul>
 </div>
@@ -329,9 +341,9 @@ sampleinfo</code></pre>
 <h1 number="4"><span class="header-section-number">4</span> Obtención de la matriz de recuentos</h1>
 <div id="cuantificación-de-lecturas-alineadas" class="section level2" number="4.1">
 <h2 number="4.1"><span class="header-section-number">4.1</span> Cuantificación de lecturas alineadas</h2>
-<p>La alineación de las secuencias, obtenidas al secuenciar, con el genoma de referencia, produce un conjunto de archivos BAM, donde cada archivo contiene las alineaciones de lectura para cada biblioteca.</p>
-<p>En el archivo BAM, se encuentra la ubicación del cromosoma para cada lectura que se asignó a esa posición. Puesto que este proceso es computacionalmente intensivo se demuestra como hacerlo utilizando un subconjunto de 1000 “reads” por muestra, alineadas con el cromosoma 1 del genoma del ratón.</p>
-<p>Utilizaremos el paquete <code>Rsubread</code>, que proporciona funciones para el mapeo de “reads” y su cuantificación.</p>
+<p>La alineación de lecturas, obtenidas al secuenciar, con el genoma de referencia, produce un conjunto de archivos BAM, donde cada archivo contiene las secuencias alineadas de cada librería.</p>
+<p>Puesto que este proceso es computacionalmente intensivo se muestra como hacerlo utilizando un subconjunto de 1000 lecturas por muestra, alineadas únicamente con el cromosoma 1 del genoma del ratón.</p>
+<p>Utilizaremos el paquete <code>Rsubread</code>, que proporciona funciones para alineamiento y cuantificación de lecturas.</p>
 <pre class="r"><code>library(Rsubread)
 bam.files &lt;- list.files(path = &quot;./data&quot;, pattern = &quot;.BAM$&quot;, full.names = TRUE)
 bam.files</code></pre>
@@ -339,7 +351,7 @@ bam.files</code></pre>
 ## [2] &quot;./data/SRR1552445.fastq.gz.subread.BAM&quot;
 ## [3] &quot;./data/SRR1552446.fastq.gz.subread.BAM&quot;
 ## [4] &quot;./data/SRR1552447.fastq.gz.subread.BAM&quot;</code></pre>
-<p>Las funciones del paquete nos permiten ver, por ejemplo, la proporción de “reads” que se asignaron al cromosoma 1:</p>
+<p>Las funciones del paquete nos permiten ver, por ejemplo, la proporción de lecturas alineadas con los genes del cromosoma 1:</p>
 <pre class="r"><code>props &lt;- propmapped(files=bam.files)[,1:2]
 props</code></pre>
 <pre><code>##                                 NumTotal NumMapped
@@ -347,11 +359,9 @@ props</code></pre>
 ## SRR1552445.fastq.gz.subread.BAM     1000       136
 ## SRR1552446.fastq.gz.subread.BAM     1000       120
 ## SRR1552447.fastq.gz.subread.BAM     1000       113</code></pre>
-<p>Los “reads” mapeados se pueden contar a través de cada genes mediante la función <code>featureCounts</code>. Esta función incorpora anotaciones integradas para ensamblajes del genoma de ratón (mm9, mm10) y humano (hg19) (anotación REFSEQ NCBI).</p>
-<p>El siguiente código utiliza los intervalos de exones definidos en la anotación <code>refseq ncbi</code> del genoma <code>mm10</code>. Los “reads” mapeados en exones se suman para obtener el recuento de cada gen con tratamiento especial para los “reads” que abarcan los límites exón-exón.</p>
-<p>Usaremos la configuración determinada de la función <code>featureCounts()</code> visible haciendo:</p>
-<pre class="r"><code>?featureCounts</code></pre>
-<p><code>featureCounts</code> toma todos los archivos BAM como entrada y devuelve un objeto que incluyes la matriz de contajes. Cada muestra da lugar a una columna y cada fila corresponde con los recuentos acumulados para un gen, en dicha muestra.</p>
+<p>Las lecturas alineadas se pueden contar a través de cada gene mediante la función <code>featureCounts</code>. Esta función incorpora anotaciones integradas para ensamblajes del genoma de ratón (mm9, mm10) y humano (hg19) (anotación REFSEQ NCBI).</p>
+<p>El siguiente código utiliza los intervalos de exones definidos en la anotación <code>refseq ncbi</code> del genoma <code>mm10</code>. Las lecturas mapeados en exones se suman para obtener el recuento de cada gen con tratamiento especial para aquellas que abarcan los límites exón-exón.</p>
+<p><code>featureCounts</code> toma todos los archivos BAM como entrada y devuelve un objeto que incluye la matriz de contajes. Cada muestra da lugar a una columna y cada fila corresponde con los recuentos acumulados para un gen, en dicha muestra.</p>
 <pre class="r"><code>fc &lt;- featureCounts(bam.files, annot.inbuilt=&quot;mm10&quot;)</code></pre>
 <pre><code>## NCBI RefSeq annotation for mm10 (build 38.1) is used.
 ## 
@@ -632,7 +642,7 @@ head(countdata)</code></pre>
 <p>Es decir, en primer lugar se estandarizan los contajes basándonos en el tamaño de la librería y a continuación se realizará el filtraje.</p>
 <p>Para ello se normalizaran los contajes brutos para las diferentes profundidades de secuenciación (tamaños de librería) para cada muestra y se compararan con los valores de recuento por millón (CPM) utilizando la función <code>cpm()</code> del paquete <code>edgeR</code>.</p>
 <p>En nuestro caso elegimos retener aquellos genes que <em>se expresan a un CPM superior a 0,5 en al menos dos muestras</em>. Esto es obviamente arbitrario, pero la experiencia sugiere que cantidades inferiores a éstas, u otras similares, suelen corresponderse con ausencia de expresión, más que otra explicación.</p>
-<p>Los tamaños de las librerías se obtienen simplemente sumando las columnas de la matriz de datos, aunque no hace falta que ésto se lleve a cabo explicita mente puesto que la función <code>cpm</code> lo hace de forma automática.</p>
+<p>Los tamaños de las librerías se obtienen simplemente sumando las columnas de la matriz de datos, aunque no hace falta que ésto se lleve a cabo explícitamente puesto que la función <code>cpm</code> lo hace de forma automática.</p>
 <pre class="r"><code>colSums(countdata)</code></pre>
 <pre><code>## BASVIR.DG BASVIR.DH BASPRE.DI BASPRE.DJ BASLAC.DK BASLAC.DL LUMVIR.LA LUMVIR.LB 
 ##  23227641  21777891  24100765  22665371  21529331  20015386  20392113  21708152 

@@ -20,22 +20,32 @@ editor_options:
 knitr::opts_chunk$set(echo = TRUE,message=FALSE, warning=FALSE)
 ```
 
-# Reconocimiento
+# Reconocimiento y referencias
 
-Este material se ha desarrollado a partir de distintos materiales basándose principalmente en las siguientes fuentes:
+Este material se ha desarrollado a partir de distintas fuentes basándose principalmente en las siguientes:
 
-- https://combine-australia.github.io/RNAseq-R/
+- [RNA-seq analysis in R. Differential expression analysis](http://combine-australia.github.io/RNAseq-R/06-rnaseq-day1.html)
 
-- https://www.bioconductor.org/packages/release/workflows/vignettes/RNAseq123/inst/doc/limmaWorkflow.html
+- RNA-seq analysis is easy as 1-2-3 with limma, Glimma and edgeR
+  - [Article](https://www.ncbi.nlm.nih.gov/pmc/articles/PMC4937821/)
+  - [Bioconductor vignette](https://www.bioconductor.org/packages/release/workflows/vignettes/RNAseq123/inst/doc/limmaWorkflow.html)
+
+Curiosamente, este estudio también se utiliza en una serie de tutoriales que llevan a cabo el similares preprocesado y análisis _usando Galaxy_.
+
+- [1. RNASeq: Reads to counts](https://training.galaxyproject.org/archive/2021-08-01/topics/transcriptomics/tutorials/rna-seq-reads-to-counts/tutorial.html)
+- [2. RNAseq: Counts to genes](https://training.galaxyproject.org/archive/2021-08-01/topics/transcriptomics/tutorials/rna-seq-counts-to-genes/tutorial.html)
+- [3. RNASeq genes to pathways](https://training.galaxyproject.org/archive/2021-08-01/topics/transcriptomics/tutorials/rna-seq-genes-to-pathways/tutorial.html)
 
 
 # Antes de empezar
 
 ## Directorios de trabajo
 
-Cree un directorio para los datos llamado "data" donde colocará todos los archivos necesarios para los análisis.
+Cree un directorio para los datos llamado "data" donde colocar todos los archivos necesarios para los análisis.
 
-Establezca el directorio de trabajo en la carpeta de donde cuelgan los datos o, preferentemente, cree un proyecto de Rstudio cuyo directorio principal sea dicha carpeta.
+Opcionalmente, puede crear un directorio "results" donde redirigir todos los archivos generados por los análisis.
+
+Establezca el directorio de trabajo en la carpeta de donde cuelgan los datos o, __preferentemente__, cree un proyecto de Rstudio cuyo directorio principal sea dicha carpeta.
 
 
 ## Instalación de paquetes
@@ -65,7 +75,8 @@ if (!require(factoextra)) install.packages("factoextra", dep=TRUE)
 ## _Dataset_ de glándulas mamarias de ratón
 
 Los datos para este tutorial provienen de un artículo de Nature Cell Biology, [EGF-mediated induction of Mcl-1 at the switch to lactation is essential for alveolar cell survival](https://pubmed.ncbi.nlm.nih.gov/25730472/)  (Fu et al 2015). 
-Tanto los datos en bruto (lecturas de secuencia) como los datos procesados (recuentos) están disponibles para su descarga de la base de datos Gene Expression Omnibus (GEO) con el número de acceso GSE60450.
+
+Tanto los datos en bruto (lecturas de secuencia) como los datos procesados (recuentos) están disponibles para su descarga de la base de datos Gene Expression Omnibus (GEO) con el número de acceso GSE60450,: [https://www.ncbi.nlm.nih.gov/geo/query/acc.cgi?acc=GSE60450](https://www.ncbi.nlm.nih.gov/geo/query/acc.cgi?acc=GSE60450).
 
 Este estudio examina los perfiles de expresión de células madre basales enriquecidas (B) y células luminales comprometidas (L) en la glándula mamaria de ratones vírgenes, preñados y lactantes. El experimento se organizó en seis grupos, uno para cada combinación de tipo de célula y estado de ratón. Cada grupo contiene dos réplicas biológicas.
 
@@ -73,9 +84,9 @@ Este estudio examina los perfiles de expresión de células madre basales enriqu
 
 Para el análisis se dispone de los archivos siguientes, copiados en el directorio `data`:
 
-* _SampleInfo.csv_: contiene información de ejemplo
-* 4 files _.bam_: contienen los resultados de alineación para 4 de los ejemplos ("demo dataset")
-* _GSE60450_Lactation-GenewiseCounts.txt_: contiene la matriz de recuentos de todo el conjunto de datos.
+- _SampleInfo.csv_: contiene información de ejemplo
+- 4 archivos _.bam_: contienen los resultados de alineación para 4 de los ejemplos ("demo dataset")
+- _GSE60450_Lactation-GenewiseCounts.txt_: contiene la matriz de recuentos de todo el conjunto de datos.
 
 ## Creación de la información de entrada
 
@@ -91,38 +102,32 @@ sampleinfo
 
 ## Cuantificación de lecturas alineadas
 
-La alineación de las secuencias, obtenidas al secuenciar, con el genoma de referencia,  produce un conjunto de archivos BAM, donde cada archivo contiene las alineaciones de lectura para cada biblioteca. 
+La alineación de lecturas, obtenidas al secuenciar, con el genoma de referencia,  produce un conjunto de archivos BAM, donde cada archivo contiene las secuencias alineadas de cada librería. 
 
-En el archivo BAM, se encuentra la ubicación del cromosoma para cada lectura que se asignó a esa posición. 
-Puesto que este proceso es computacionalmente intensivo se demuestra como hacerlo utilizando un subconjunto de 1000 "reads" por muestra, alineadas con el cromosoma 1 del genoma del ratón.
+Puesto que este proceso es computacionalmente intensivo se muestra como hacerlo utilizando un subconjunto de 1000 lecturas por muestra, alineadas únicamente con el cromosoma 1 del genoma del ratón.
 
-Utilizaremos el paquete `Rsubread`,  que proporciona funciones para el mapeo de "reads" y su cuantificación.
+Utilizaremos el paquete `Rsubread`,  que proporciona funciones para alineamiento y cuantificación de lecturas.
 
-```{r}
+```{r listBAMfiles}
 library(Rsubread)
 bam.files <- list.files(path = "./data", pattern = ".BAM$", full.names = TRUE)
 bam.files
 ```
 
-Las funciones del paquete nos permiten ver, por ejemplo, la proporción de "reads" que se asignaron al cromosoma 1:
+Las funciones del paquete nos permiten ver, por ejemplo, la proporción de lecturas alineadas con los genes del cromosoma 1:
 
-```{r}
+```{r mapedSeqs}
 props <- propmapped(files=bam.files)[,1:2]
 props
 ```
 
-Los "reads" mapeados se pueden contar a través de cada genes mediante la función `featureCounts`. Esta función incorpora anotaciones integradas para ensamblajes del genoma de ratón (mm9, mm10) y humano (hg19) (anotación REFSEQ NCBI).
+Las lecturas alineadas se pueden contar a través de cada gene mediante la función `featureCounts`. Esta función incorpora anotaciones integradas para ensamblajes del genoma de ratón (mm9, mm10) y humano (hg19) (anotación REFSEQ NCBI).
 
-El siguiente código utiliza los intervalos de exones definidos en la anotación `refseq ncbi` del genoma `mm10`. Los "reads" mapeados en exones se suman para obtener el recuento de cada gen con tratamiento especial para los "reads" que abarcan los límites exón-exón. 
+El siguiente código utiliza los intervalos de exones definidos en la anotación `refseq ncbi` del genoma `mm10`. Las lecturas mapeados en exones se suman para obtener el recuento de cada gen con tratamiento especial para aquellas que abarcan los límites exón-exón. 
 
-Usaremos la configuración determinada de la función `featureCounts()` visible haciendo:
-```{r}
-?featureCounts
-```
+`featureCounts` toma todos los archivos BAM como entrada y devuelve un objeto que incluye la matriz de contajes. Cada muestra da lugar a una columna y cada fila corresponde con los recuentos acumulados para un gen, en dicha muestra.
 
-`featureCounts` toma todos los archivos BAM como entrada y devuelve un objeto que incluyes la matriz de contajes. Cada muestra da lugar a una columna y cada fila corresponde con los recuentos acumulados para un gen, en dicha muestra.
-
-```{r}
+```{r countFeatures}
 fc <- featureCounts(bam.files, annot.inbuilt="mm10")
 class(fc)
 names(fc)
@@ -226,7 +231,7 @@ Para ello se normalizaran los contajes brutos para las diferentes profundidades 
 
 En nuestro caso elegimos retener aquellos genes que _se expresan a un CPM superior a 0,5 en al menos dos muestras_. Esto es obviamente arbitrario, pero la experiencia sugiere que cantidades inferiores a éstas, u otras similares, suelen corresponderse con ausencia de expresión, más que otra explicación.
 
-Los tamaños de las librerías se obtienen simplemente sumando las columnas de la matriz de datos, aunque no hace falta que ésto se lleve a cabo explicita mente puesto que la función `cpm` lo hace de forma automática.
+Los tamaños de las librerías se obtienen simplemente sumando las columnas de la matriz de datos, aunque no hace falta que ésto se lleve a cabo explícitamente puesto que la función `cpm` lo hace de forma automática.
 
 ```{r librarySizes}
 colSums(countdata)
