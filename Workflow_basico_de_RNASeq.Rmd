@@ -65,7 +65,7 @@ if (!require(Rsubread)) BiocManager::install("Rsubread")
 if (!require(edgeR))BiocManager::install("edgeR")
 if (!require(limma))BiocManager::install("limma")
 if (!require(pheatmap))BiocManager::install("pheatmap")
-if (!require(org.Mm.eg.db))BiocManager::install("org.Mm.db")
+if (!require(org.Mm.eg.db))BiocManager::install("org.Mm.eg.db")
 if (!require(clusterprofiler))BiocManager::install("clusterProfiler")
 if (!require(factoextra)) install.packages("factoextra", dep=TRUE)
 ```
@@ -105,9 +105,9 @@ Una vez descargados se obtiene es un archivo de texto por cada muestra. Una posi
 En realidad esto no es preciso porque el archivo con los contajes de todas las muestras también se encuentra disponible, y descargable del mismo sitio:
 
 ```{r downloadData2, eval=FALSE}
-url <- "https://www.ncbi.nlm.nih.gov/geo/query/acc.cgi?acc=GSE60450#:~:text=GSE60450_Lactation%2DGenewiseCounts.txt.gz"
-utils::download.file(url, destfile="GSE60450_Lactation2DGenewiseCounts.txt.gz", mode="wb") 
-R.utils::gunzip("GSE60450_Lactation2DGenewiseCounts.txt.gz")
+url <- "https://www.ncbi.nlm.nih.gov/geo/download/?acc=GSE60450&format=file&file=GSE60450%5FLactation%2DGenewiseCounts%2Etxt%2Egz"
+utils::download.file(url, destfile="GSE60450_Lactation-GenewiseCounts.txt.gz", mode="wb") 
+R.utils::gunzip("GSE60450_Lactation-GenewiseCounts.txt.gz")
 
 ```
 
