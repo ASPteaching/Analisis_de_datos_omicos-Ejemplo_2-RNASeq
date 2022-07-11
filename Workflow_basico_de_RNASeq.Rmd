@@ -66,7 +66,7 @@ if (!require(edgeR))BiocManager::install("edgeR")
 if (!require(limma))BiocManager::install("limma")
 if (!require(pheatmap))BiocManager::install("pheatmap")
 if (!require(org.Mm.eg.db))BiocManager::install("org.Mm.db")
-if (!require(clusterprofiler))BiocManager::install("clusterProfiler")
+if (!require(clusterProfiler))BiocManager::install("clusterProfiler")
 if (!require(factoextra)) install.packages("factoextra", dep=TRUE)
 ```
 
@@ -80,6 +80,11 @@ Los datos para este tutorial provienen de un artículo de Nature Cell Biology, [
 Tanto los datos en bruto (lecturas de secuencia) como los datos procesados (recuentos) están disponibles para su descarga de la base de datos Gene Expression Omnibus (GEO) con el número de acceso GSE60450,: [https://www.ncbi.nlm.nih.gov/geo/query/acc.cgi?acc=GSE60450](https://www.ncbi.nlm.nih.gov/geo/query/acc.cgi?acc=GSE60450).
 
 Este estudio examina los perfiles de expresión de células madre basales enriquecidas (B) y células luminales comprometidas (L) en la glándula mamaria de ratones vírgenes, preñados y lactantes. El experimento se organizó en seis grupos, uno para cada combinación de tipo de célula y estado de ratón. Cada grupo contiene dos réplicas biológicas.
+
+```{r}
+knitr::include_graphics("images/mouse_exp.png")
+```
+
 
 ## Archivos
 
