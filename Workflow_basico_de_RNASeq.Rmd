@@ -4,12 +4,14 @@ author: "Mireia Ferrer, Ricardo Gonzalo y Alex Sanchez"
 date: "Diciembre 2021"
 output:
   html_document:
+    code_folding: show
     toc: true
     toc_depth: 3
     toc_float: 
       collapsed: true
       smooth_scroll: true
     number_sections: true
+    
     theme: cerulean
     highlight: textmate
 editor_options: 
