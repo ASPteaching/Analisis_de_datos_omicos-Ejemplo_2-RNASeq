@@ -60,13 +60,17 @@ Además se utilizarán los siguientes paquetes:
 
 EL código siguiente los instalará si no están instalados y, en caso de que lo estén, los cargará en memoria (equivaliendo, en este caso, a una instrucción `library`).
 
-```{r instalPackages}
+En la práctica se puede ejecutar este código una vez y después comentarlo o ponerlo a FALSE en la cabecera del bloque de Rmarkdown.
+
+```{r instalPackages, eval=FALSE}
 if (!require(Rsubread)) BiocManager::install("Rsubread")
 if (!require(edgeR))BiocManager::install("edgeR")
 if (!require(limma))BiocManager::install("limma")
 if (!require(pheatmap))BiocManager::install("pheatmap")
 if (!require(org.Mm.eg.db))BiocManager::install("org.Mm.db")
 if (!require(clusterProfiler))BiocManager::install("clusterProfiler")
+if (!require(org.Mm.eg.db))BiocManager::install("org.Mm.eg.db")
+if (!require(clusterprofiler))BiocManager::install("clusterProfiler")
 if (!require(factoextra)) install.packages("factoextra", dep=TRUE)
 ```
 
@@ -110,9 +114,9 @@ Una vez descargados se obtiene es un archivo de texto por cada muestra. Una posi
 En realidad esto no es preciso porque el archivo con los contajes de todas las muestras también se encuentra disponible, y descargable del mismo sitio:
 
 ```{r downloadData2, eval=FALSE}
-url <- "https://www.ncbi.nlm.nih.gov/geo/query/acc.cgi?acc=GSE60450#:~:text=GSE60450_Lactation%2DGenewiseCounts.txt.gz"
-utils::download.file(url, destfile="GSE60450_Lactation2DGenewiseCounts.txt.gz", mode="wb") 
-R.utils::gunzip("GSE60450_Lactation2DGenewiseCounts.txt.gz")
+url <- "https://www.ncbi.nlm.nih.gov/geo/download/?acc=GSE60450&format=file&file=GSE60450%5FLactation%2DGenewiseCounts%2Etxt%2Egz"
+utils::download.file(url, destfile="GSE60450_Lactation-GenewiseCounts.txt.gz", mode="wb") 
+R.utils::gunzip("GSE60450_Lactation-GenewiseCounts.txt.gz")
 
 ```
 
@@ -400,15 +404,17 @@ Para la primera representación es habitual basarse en el resultado de un análi
 
 De forma análoga, el escalamiento multidimensional permite llevar a cabo una transformación similar a la del PCA, pero con la matriz de distancias, lo que proporciona una representación en dimensión reducida que describe con relativa fidelidad las diferencias y similaridades entre muestras. 
 
-Para esta segunda representación utilizaremos la función `plotMDS`.
+Para esta segunda representación utilizaremos la función `plotMDS` del paquete `limma`.
+
 Es un poco difícil ver exactamente qué está pasando con la gráfica predeterminada, aunque vemos muestras que se agrupan en pares. Para hacer esta gráfica más informativa, podemos colorear las muestras de acuerdo con la información de agrupación (por ejemplo. Estado):
 
 ```{r}
 sampleinfo$Status <- factor (sampleinfo$Status)
 col.status <- c("blue","red","dark green")[sampleinfo$Status]
 data.frame(sampleinfo$Status,col.status)
-plotMDS(logcounts_norm,col=col.status, main="Status", cex=0.7)
+limma::plotMDS(logcounts_norm,col=col.status, main="Status", cex=0.7)
 ```
+
 Como puede verse, el gráfico muestra la misma agrupación "natural" que el cluster jerárquico es decir que los grupos parecen estar bien definidos.
 
 # Análisis de expresión diferencial con limma-voom
@@ -428,6 +434,7 @@ La ventaja principal de esta aproximación es que permite trabajar con toda la f
 Supongamos que estamos interesados en genes que se ven afectados por el embarazo y la lactancia en individuos basales o luminales. Utilizando las variable "CellType" y "Status" que combina ambos factores podemos definir la matriz del diseño y, sobre ésta, los contrastes que nos interesan.
 
 ```{r}
+library(limma)
 group <- paste(sampleinfo$CellType, sampleinfo$Status,  sep="." )
 design  <-  model.matrix(~0+group)
 colnames(design) <- gsub("group", "", colnames(design))
@@ -562,6 +569,7 @@ Para el análisis de enriquecimiento utilizaremos la función `enrichGO` del paq
 
 ```{r}
 library(clusterProfiler)
+library(org.Mm.eg.db)
 ego <- enrichGO(gene = selectedEntrezsUP, 
                 universe = allEntrezs,
                 keyType = "ENTREZID",
