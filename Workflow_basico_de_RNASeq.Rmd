@@ -1,7 +1,7 @@
 ---
 title: "_Workflow_ de análisis de expresión diferencial usando RNA-seq"
 author: "Mireia Ferrer, Ricardo Gonzalo y Alex Sanchez"
-date: "Diciembre 2021"
+date: "Diciembre 2024"
 output:
   html_document:
     code_folding: show
@@ -11,7 +11,6 @@ output:
       collapsed: true
       smooth_scroll: true
     number_sections: true
-    
     theme: cerulean
     highlight: textmate
 editor_options: 
@@ -71,8 +70,6 @@ if (!require(limma))BiocManager::install("limma")
 if (!require(pheatmap))BiocManager::install("pheatmap")
 if (!require(org.Mm.eg.db))BiocManager::install("org.Mm.db")
 if (!require(clusterProfiler))BiocManager::install("clusterProfiler")
-if (!require(org.Mm.eg.db))BiocManager::install("org.Mm.eg.db")
-if (!require(clusterprofiler))BiocManager::install("clusterProfiler")
 if (!require(factoextra)) install.packages("factoextra", dep=TRUE)
 ```
 
@@ -337,7 +334,7 @@ Podemos usar la función `cpm`  para obtener recuentos `log2` por millón, que s
 # Get log2 counts per million
 logcounts <- cpm(dgeObj,log=TRUE)
 # Check distributions of samples using boxplots
-boxplot(logcounts, ylab="Log2-CPM",las=2, xlab="", cex.axis=0.8, main="Boxplots of logCPMs (unnormalised)")
+boxplot(logcounts, ylab="Log2-CPM",las=2, xlab="", cex.axis=0.8, main="Boxplots of logCPMs (unnormalised)", cex.main=0.8)
 # Let's add a blue horizontal line that corresponds to the median logCPM
 abline(h=median(logcounts), col="blue")
 ```
@@ -393,7 +390,7 @@ fviz_dist(sampleDists)
 A partir de la matriz de distancias podemos realizar un agrupamiento jerárquico de las muestras en donde se puede ver como éstas tienden a agruparse de forma natural por los grupos experimentales que se han definido.
 
 ```{r}
-plot(hclust(sampleDists),labels = colnames(logcounts_norm),main = "Dendogram of sample distances", cex=0.8)
+plot(hclust(sampleDists),labels = colnames(logcounts_norm),main = "Dendogram of sample distances", cex.lab=0.8, cex.main=0.9)
 ```
 
 Como puede verse las muestras tienden a agruparse, por grupo, luminal o basal, dentro de éste por estado y finalmente por réplica. 
@@ -599,15 +596,16 @@ Uno de los aspectos interesantes del paquete `clusterProfiler` es que permite vi
 Este gráfico compara visualmente las categorías enriquecidas (de más a menos enriquecidas) visualizando simultáneamente cuan enriquecidas estan y el p-valor del test de enriquecimiento.
 
 ```{r} 
-dotplot(ego, showCategory=9)
+dotplot(ego, showCategory=9, font.size=6)
 ```
 
 **Visualización jerárquica de los términos GO**
 
 Este gráfico permite visualizar los términos seleccionados dentro del sub-grafo de la GO que los contiene. Esto nos, permite por ejemplo, hacernos una idea de si estan muy dispersos, o no, en la  jerarquía y de si se trata de términos muy generales o más específicos.
 
-```{r}
-goplot(ego, showCategory=5, cex=0.5)
+```{r eval=FALSE}
+# En fech 2024-12-07 Esta funcion falla con R 4.4, por lo que se puede omitir su uso
+goplot(ego)
 ```
 
 **Gene network para los términos seleccionados**
@@ -615,7 +613,7 @@ goplot(ego, showCategory=5, cex=0.5)
 De forma parecida una red de genes nos permite visualizar la asociación entre los genes y las categorías seleccionadas en las que éstos genes estan anotados.
 
 ```{r}
-cnetplot(ego) 
+cnetplot(ego, font.size=5) 
 ```
 
 **Enrichment Map**
@@ -626,5 +624,11 @@ Finalmente este gráfico permite simplificar las visualizaciones y agrupa los 50
 library(enrichplot)
 ego_sim <- pairwise_termsim(ego)
 emapplot(ego_sim, cex_label_category=0.5)
+```
+
+```{r echo=FALSE}
+sink("Session_Information.txt")
+sessionInfo()
+sink()
 ```
 
